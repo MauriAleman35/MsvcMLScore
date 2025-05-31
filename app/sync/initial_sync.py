@@ -1,8 +1,9 @@
-import asyncio
+
 import logging
-from datetime import datetime,timezone
-from sqlalchemy import select
-from typing import Dict, Any, List
+from datetime import datetime, timezone
+from sqlalchemy import text, select, Table
+import traceback
+
 
 # Importar modelos Beanie
 from app.db.models.user import UserDocument
@@ -12,34 +13,28 @@ from app.db.models.solicitude import SolicitudeDocument
 from app.db.models.offer import OfferDocument
 from app.sync.pg_conector import get_pg_table,pg_session_local
 
-
 logger = logging.getLogger(__name__)
 
 async def sync_users():
     """Sincroniza usuarios desde PostgreSQL a MongoDB"""
     logger.info("Iniciando sincronización de usuarios")
     
-    # Obtener tablas PostgreSQL
-    pg_tables = get_pg_table()
-    users_table = pg_tables.get('users')
-    
-    if not users_table:
-        logger.error("No se pudo encontrar la tabla 'users' en PostgreSQL")
-        return
-    
-    # Crear sesión PostgreSQL
+    # Crear sesión PostgreSQL directamente
     session = pg_session_local()
+    logger.info("Sesión PostgreSQL creada")
     
     try:
-        # Consultar usuarios de tipo prestatario
-        query = select(users_table).where(users_table.c.user_type == 'prestatario')
-        result = session.execute(query)
+        # Usar SQL crudo con text() para evitar problemas de construcción con enums personalizados
+        sql = text("SELECT * FROM \"user\" WHERE user_type = 'prestatario'")
+        logger.info(f"Ejecutando SQL: {sql}")
+        result = session.execute(sql)
         
         # Contador para seguimiento
         count = 0
         
         # Procesar cada usuario
         for row in result:
+            # Convertir fila a diccionario - uso correcto con sql text()
             user_data = dict(row._mapping)
             
             # Crear o actualizar documento MongoDB
@@ -65,7 +60,7 @@ async def sync_users():
                     email=user_data.get("email"),
                     adress_verified=user_data.get("adress_verified", False),
                     identity_verified=user_data.get("identity_verified", False),
-                    created_at=user_data.get("created_at", datetime.utcnow()),
+                    created_at=datetime.utcnow(),  # La tabla puede no tener esta columna
                     updated_at=datetime.utcnow()
                 )
                 await new_user.insert()
@@ -77,6 +72,8 @@ async def sync_users():
     
     except Exception as e:
         logger.error(f"Error en sincronización de usuarios: {str(e)}")
+        logger.error(f"Traza completa: {traceback.format_exc()}")
+        raise
     finally:
         session.close()
 
@@ -86,7 +83,7 @@ async def sync_loans():
     
     # Obtener tablas PostgreSQL
     pg_tables = get_pg_table()
-    loans_table = pg_tables.get('loans')
+    loans_table = pg_tables.get('loan')
     
     if not loans_table:
         logger.error("No se pudo encontrar la tabla 'loans' en PostgreSQL")
@@ -151,7 +148,7 @@ async def sync_monthly_payments():
     
     # Obtener tablas PostgreSQL
     pg_tables = get_pg_table()
-    payments_table = pg_tables.get('monthly_payments')
+    payments_table = pg_tables.get('monthly_payment')
     
     if not payments_table:
         logger.error("No se pudo encontrar la tabla 'monthly_payments' en PostgreSQL")
@@ -215,7 +212,7 @@ async def sync_solicitudes():
     
     # Obtener tablas PostgreSQL
     pg_tables = get_pg_table()
-    solicitudes_table = pg_tables.get('solicitudes')
+    solicitudes_table = pg_tables.get('solicitude')
     
     if not solicitudes_table:
         logger.error("No se pudo encontrar la tabla 'solicitudes' en PostgreSQL")
@@ -272,7 +269,7 @@ async def sync_offers():
     
     # Obtener tablas PostgreSQL
     pg_tables = get_pg_table()
-    offers_table = pg_tables.get('offers')
+    offers_table = pg_tables.get('offer')
     
     if not offers_table:
         logger.error("No se pudo encontrar la tabla 'offers' en PostgreSQL")
@@ -331,14 +328,14 @@ async def sync_offers():
 async def sync_all_data():
     """Ejecuta la sincronización completa de todos los datos"""
     logger.info("Iniciando sincronización completa de datos")
-    
+    logger.info(f"Tablas disponibles: {list(get_pg_table().keys())}")
     try:
         # Sincronizar en secuencia para mantener integridad referencial
         await sync_users()
-        await sync_loans()
-        await sync_monthly_payments()
-        await sync_offers()
-        await sync_solicitudes()
+        await sync_solicitudes()  # Primero solicitudes (dependen de usuarios)
+        await sync_offers()       # Segundo ofertas (dependen de solicitudes)
+        await sync_loans()        # Tercero préstamos (dependen de ofertas)
+        await sync_monthly_payments()  #
         
         logger.info("Sincronización completa finalizada exitosamente")
     except Exception as e:
