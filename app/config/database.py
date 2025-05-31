@@ -1,32 +1,53 @@
+import motor.motor_asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
-from beanie import init_beanie
-from app.config.settings import settings
+import os
+from dotenv import load_dotenv
+import logging
 
-# Importamos modelos de MongoDB
-from app.db.models.user import UserDocument
-from app.db.models.loan import LoanDocument
-from app.db.models.monthly_payment import MonthlyPaymentDocument
-from app.db.models.solicitude import SolicitudeDocument
-from app.db.models.offer import OfferDocument
+# Configurar logging
+logger = logging.getLogger(__name__)
 
-# Cliente MongoDB
-async def get_mongo_client():
-    client = AsyncIOMotorClient(settings.mongo_connection_string)
-    return client
+# Cargar variables de entorno
+load_dotenv()
 
-# Inicialización de Beanie
+# Variable global para guardar la conexión de MongoDB
+_mongo_client = None
+_mongo_db = None
+
 async def init_mongodb():
-    client = await get_mongo_client()
+    """Inicializa la conexión a MongoDB de forma asíncrona"""
+    global _mongo_client, _mongo_db
     
-    # Inicializar Beanie con todos nuestros modelos de documento
-    await init_beanie(
-        database=client[settings.MONGO_DB],
-        document_models=[
-            UserDocument,
-            LoanDocument, 
-            MonthlyPaymentDocument,
-            SolicitudeDocument,
-            OfferDocument
-        ]
-    )
-    
+    try:
+        # Obtener configuración
+        MONGO_URI = os.getenv("MONGO_URI")
+        MONGO_DB = os.getenv("MONGO_DB", "loanData")
+        
+        # Crear cliente
+        _mongo_client = AsyncIOMotorClient(
+            MONGO_URI,
+            maxPoolSize=100,
+            minPoolSize=10,
+            maxIdleTimeMS=30000,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=10000,
+            retryWrites=True,
+            w="majority"
+        )
+        _mongo_db = _mongo_client[MONGO_DB]
+        
+        # Verificar conexión
+        await _mongo_client.admin.command('ping')
+        logger.info(f"Conexión a MongoDB inicializada exitosamente para la base de datos '{MONGO_DB}'")
+        
+        return _mongo_db
+    except Exception as e:
+        logger.error(f"Error al inicializar MongoDB: {str(e)}")
+        raise
+
+def get_mongo_db():
+    """Devuelve la base de datos MongoDB inicializada"""
+    global _mongo_db
+    if _mongo_db is None:
+        raise RuntimeError("MongoDB no ha sido inicializado. Llama a init_mongodb() primero.")
+    return _mongo_db
