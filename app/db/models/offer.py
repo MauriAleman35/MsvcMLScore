@@ -12,7 +12,7 @@ class OfferDocument(Document):
     monthly_payment: float
     total_repayment_amount: float
     status: str="aceptada"
-    created_at: datetime = Field(default_factory=datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda:datetime.now(timezone.utc))
 
 
     class Settings:

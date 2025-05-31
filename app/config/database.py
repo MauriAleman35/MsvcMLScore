@@ -29,3 +29,4 @@ async def init_mongodb():
             OfferDocument
         ]
     )
+    

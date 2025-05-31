@@ -6,7 +6,7 @@ from pydantic import Field, validator
 from bson import ObjectId
 
 
-class Loan(Document):
+class LoanDocument(Document):
     # Mongo crea _id (ObjectId) automáticamente ― no lo declares si no lo necesitas
     id:        int                  # índice único opcional
     id_offer:  int

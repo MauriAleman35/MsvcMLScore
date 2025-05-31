@@ -1,6 +1,7 @@
-from beanie import Document,Field 
+from beanie import Document
+from pydantic import Field  # Importar Field desde pydantic, no desde beanie
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 class UserDocument(Document):
     id: int = Field(..., description="ID del usuario (mismo que en ERP)")
     name: str
@@ -9,8 +10,8 @@ class UserDocument(Document):
     email: Optional[str] = None
     adress_verified: bool = False
     identity_verified: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
+    created_at: datetime = Field(default_factory=datetime.now)
+    
     
     # Configuración del documento
     class Settings:

@@ -12,16 +12,16 @@ class Settings(BaseSettings):
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
-    # Postgres
+    # PostgreSQL
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "password")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "Mauri3524")
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
     POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
-    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "ml_scoring_db")
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "loanData")
     
-    # MongoDB
+     # MongoDB
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-    MONGO_DB: str = os.getenv("MONGO_DB", "loan")
+    MONGO_DB: str = os.getenv("MONGO_DB", "loanData")
     
     # RabbitMQ
     RABBITMQ_HOST: str = os.getenv("RABBITMQ_HOST", "localhost")
@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     LOAN_EVENTS_QUEUE: str = os.getenv("LOAN_EVENTS_QUEUE", "loan_events")
     PAYMENT_EVENTS_QUEUE: str = os.getenv("PAYMENT_EVENTS_QUEUE", "payment_events")
     
+
+    ENABLE_INITIAL_SYNC: bool = os.getenv("ENABLE_INITIAL_SYNC", "true").lower() == "true"
     # Database URL
     @property
     def postgres_url(self):

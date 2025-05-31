@@ -1,16 +1,14 @@
 import logging
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import strawberry
 from strawberry.fastapi import GraphQLRouter
-from sqlalchemy.orm import Session
 import uvicorn
-import os
-
+from app.sync.initial_sync import sync_all_data
 from app.config.settings import settings
-from app.db.session import get_db, engine, Base
-from app.db.models import User, Loan, MonthlyPayment, Solicitude, Offer
+import asyncio
 
+from app.config.database import init_mongodb
 # Configurar logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
@@ -18,8 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Crear tablas en la base de datos (en producción usar Alembic para migraciones)
-Base.metadata.create_all(bind=engine)
+
 
 # Inicializar aplicación FastAPI
 app = FastAPI(
@@ -27,7 +24,15 @@ app = FastAPI(
     description="API para cálculo de scores crediticios basado en IA",
     version="1.0.0",
 )
-
+@app.on_event("startup")
+async def startup_db_clients():
+    # Inicializar MongoDB con Beanie (código que ya tienes)
+    await init_mongodb()
+    
+    # Ejecutar sincronización inicial si está habilitada
+    if settings.ENABLE_INITIAL_SYNC:
+        logger.info("Iniciando sincronización inicial de datos")
+        asyncio.create_task(sync_all_data())
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
@@ -37,16 +42,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Verificar conexión a la base de datos
-@app.get("/health/db", tags=["Health"])
-async def check_db_health(db: Session = Depends(get_db)):
-    try:
-        # Intentar ejecutar una consulta simple
-        db.execute("SELECT 1")
-        return {"status": "ok", "message": "Database connection is healthy"}
-    except Exception as e:
-        logger.error(f"Database health check failed: {str(e)}")
-        return {"status": "error", "message": str(e)}
+# # Verificar conexión a la base de datos
+# @app.get("/health/db", tags=["Health"])
+# async def check_db_health(db: Session = Depends(get_db)):
+#     try:
+#         # Intentar ejecutar una consulta simple
+#         db.execute("SELECT 1")
+#         return {"status": "ok", "message": "Database connection is healthy"}
+#     except Exception as e:
+#         logger.error(f"Database health check failed: {str(e)}")
+#         return {"status": "error", "message": str(e)}
 
 # Rutas básicas
 @app.get("/", tags=["Root"])
