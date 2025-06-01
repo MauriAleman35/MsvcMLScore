@@ -14,6 +14,10 @@ from app.config.postgres_conection import init_postgres_models
 from app.sync.data_sync import sync_table_to_mongodb
 from app.config.settings import settings
 
+# Importaciones para el modelo ML
+from app.ml.services.score_service import ScorePredictionService
+from app.ml.schemas.score_schemas import ScorePredictionInput, ScorePredictionResult, InputFeatures
+
 # Cargar variables de entorno
 load_dotenv()
 
@@ -23,6 +27,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Inicializar servicio de predicción
+score_service = ScorePredictionService()
 
 # Inicializar aplicación FastAPI
 app = FastAPI(
@@ -65,7 +72,7 @@ async def trigger_sync():
 async def sync_status():
     try:
         # Obtener información de sincronización de MongoDB
-        mongo_db = get_mongo_db()  # Usar get_mongo_db en lugar de initialize_mongodb
+        mongo_db = get_mongo_db()
         status_doc = await mongo_db.system_info.find_one({"initialization": "completed"})
         if status_doc:
             return {
@@ -121,10 +128,96 @@ async def sync_all_data():
         logger.error(f"Error en la sincronización: {str(e)}")
         return False
 
-# Evento de inicio de la aplicación para la sincronización inicial
+# Implementación GraphQL con queries y mutations
+@strawberry.type
+class Query:
+    @strawberry.field
+    def hello(self) -> str:
+        return "Hello World"
+    
+    @strawberry.field
+    def version(self) -> str:
+        return "1.0.0"
+
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    def predict_score(self, input_data: ScorePredictionInput) -> ScorePredictionResult:
+        """Predice el score crediticio basado en los datos de entrada"""
+        try:
+            # Convertir input a diccionario
+            input_dict = {
+                'adress_verified': input_data.adress_verified,
+                'identity_verified': input_data.identity_verified,
+                'loan_count': input_data.loan_count,
+                'late_payment_count': input_data.late_payment_count,
+                'avg_days_late': input_data.avg_days_late,
+                'total_penalty': input_data.total_penalty,
+                'payment_completion_ratio': input_data.payment_completion_ratio,
+                'has_no_late_payments': input_data.has_no_late_payments,
+                'has_penalty': input_data.has_penalty,
+                'loans_al_dia_ratio': input_data.loans_al_dia_ratio,
+                'days_late_per_loan': input_data.days_late_per_loan
+            }
+            
+            # Log para debug
+            logger.info(f"Prediciendo score con datos: {input_dict}")
+            
+            # Llamar al servicio de predicción
+            result = score_service.predict_score(input_dict)
+            
+            # Log del resultado
+            logger.info(f"Resultado de predicción: {result}")
+            
+            # Verificar si hay score en el resultado
+            if "score" not in result or result["score"] is None:
+                logger.warning("El modelo no retornó un score. Usando valor por defecto.")
+                result["score"] = 50.0
+            
+            # Crear objeto InputFeatures desde el diccionario
+            input_features = None
+            if "input_features" in result and result["input_features"]:
+                input_features = InputFeatures(
+                    adress_verified=result["input_features"].get("adress_verified", 0),
+                    identity_verified=result["input_features"].get("identity_verified", 0),
+                    loan_count=result["input_features"].get("loan_count", 0),
+                    late_payment_count=result["input_features"].get("late_payment_count", 0),
+                    avg_days_late=result["input_features"].get("avg_days_late", 0.0),
+                    total_penalty=result["input_features"].get("total_penalty", 0.0),
+                    payment_completion_ratio=result["input_features"].get("payment_completion_ratio", 0.0),
+                    has_no_late_payments=result["input_features"].get("has_no_late_payments", 0),
+                    has_penalty=result["input_features"].get("has_penalty", 0),
+                    loans_al_dia_ratio=result["input_features"].get("loans_al_dia_ratio", 0.0),
+                    days_late_per_loan=result["input_features"].get("days_late_per_loan", 0.0)
+                )
+            
+            # Devolver resultado enriquecido con categoría y explicación
+            return ScorePredictionResult(
+                score=float(result.get("score", 50.0)),
+                confidence=result.get("confidence", 0.0),
+                category=result.get("category", "N/A"),
+                risk_level=result.get("risk_level", "N/A"),
+                explanation=result.get("explanation", []),
+                error=result.get("error"),
+                input_features=input_features
+            )
+        except Exception as e:
+            logger.error(f"Error al predecir score: {str(e)}")
+            # Devolver un valor por defecto
+            return ScorePredictionResult(
+                score=50.0,
+                confidence=0.0,
+                category="Error",
+                risk_level="No determinado",
+                explanation=["Error en el servicio de predicción"],
+                error=f"Error en el servicio: {str(e)}",
+                input_features=None
+            )
+
+
+# Evento de inicio de la aplicación
 @app.on_event("startup")
 async def startup_db_clients():
-    # Inicializar MongoDB y PostgreSQL
     try:
         # Inicializar PostgreSQL
         init_postgres_models()
@@ -140,19 +233,13 @@ async def startup_db_clients():
         else:
             logger.info("Sincronización inicial deshabilitada")
     except Exception as e:
-        logger.error(f"Error al inicializar bases de datos: {str(e)}")
+        logger.error(f"Error al inicializar servicios: {str(e)}")
 
-# Implementación GraphQL básica
-@strawberry.type
-class Query:
-    @strawberry.field
-    def hello(self) -> str:
-        return "Hello World"
-
-schema = strawberry.Schema(query=Query)
+# Crear schema de GraphQL incluyendo Query y Mutation
+schema = strawberry.Schema(query=Query, mutation=Mutation)
 graphql_app = GraphQLRouter(schema)
 
-# Agregar GraphQL
+# Agregar GraphQL a la aplicación
 app.include_router(graphql_app, prefix="/graphql")
 
 # Iniciar aplicación con Uvicorn si se ejecuta directamente

@@ -10,16 +10,16 @@ sqlalchemy==2.0.12
 psycopg2-binary==2.9.6
 alembic==1.10.4
 
-# MongoDB (para consultas directas si es necesario)
+# MongoDB
 pymongo==4.3.3
 motor==3.1.2
 beanie==1.19.0
 
-# Machine Learning
-tensorflow==2.18.0
-
-
-pandas==2.0.1
+# Machine Learning (versiones compatibles)
+tensorflow==2.15.0
+numpy==1.24.4
+pandas==1.5.3
+scikit-learn==1.2.2
 joblib==1.2.0
 
 # Mensajería
