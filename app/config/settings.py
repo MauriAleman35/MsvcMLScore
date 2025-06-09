@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # API settings
     API_ENV: str = os.getenv("API_ENV", "development")
     API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
-    API_PORT: int = int(os.getenv("API_PORT", "8000"))
+    API_PORT: int = int(os.getenv("API_PORT", "8001"))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
     # PostgreSQL

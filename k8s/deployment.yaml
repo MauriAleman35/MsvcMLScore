@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-microservice
+  namespace: ml-microservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ml-microservice
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ml-microservice
+    spec:
+      containers:
+      - name: ml-microservice
+        image: moisodev/mssml:latest 
+        ports:
+        - containerPort: 8001
+          name: http
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+        envFrom:
+        - configMapRef:
+            name: ml-microservice-config
+        - secretRef:
+            name: ml-microservice-secrets
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: ml-microservice-exports-pvc
