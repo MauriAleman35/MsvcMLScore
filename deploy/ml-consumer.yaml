@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-consumer
+  namespace: credit-scoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-consumer
+  template:
+    metadata:
+      labels:
+        app: ml-consumer
+    spec:
+      containers:
+      - name: ml-consumer
+        image: moisodev/ml-scoring:latest  # Reemplaza con tu imagen
+        env:
+        - name: APP_MODE
+          value: "consumer"
+        envFrom:
+        - configMapRef:
+            name: ml-config
+        - secretRef:
+            name: ml-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
